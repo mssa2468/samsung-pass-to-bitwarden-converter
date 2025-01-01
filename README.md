@@ -2,14 +2,6 @@
 
 Samsung Pass to Bitwarden Converter is a Python utility designed to decrypt Samsung Pass exports (.spass files) and convert them into a Bitwarden-compatible JSON format. This tool handles various types of data stored in Samsung Pass, including login credentials, secure notes, payment cards, and addresses, transforming them into corresponding Bitwarden item types.
 
-Key features of the converter include:
-
-1. Decryption of Samsung Pass encrypted data using AES-CBC encryption
-2. Parsing of multiple data tables from the decrypted content
-3. Conversion of Samsung Pass data structures to Bitwarden-compatible formats
-4. Support for different item types: logins, secure notes, payment cards, and identities
-5. Error handling for common issues during decryption and parsing
-
 The script utilizes several Python libraries, including `cryptography` for decryption, `pandas` for data manipulation, and built-in modules for file handling and user input. It provides a command-line interface for users to input the .spass file path and the export password, making it accessible for users with basic command-line knowledge.
 
 The converter is structured with a main `BitwardenConverter` class that encapsulates the core functionality, including methods for decryption, table parsing, and Bitwarden item creation. This design allows for easy maintenance and potential future enhancements.
