@@ -1,103 +1,124 @@
 # Samsung Pass to Bitwarden Converter
 
-Samsung Pass to Bitwarden Converter is a Python utility designed to decrypt Samsung Pass exports (.spass files) and convert them into a Bitwarden-compatible JSON format. This tool handles various types of data stored in Samsung Pass, including login credentials, secure notes, payment cards, and addresses, transforming them into corresponding Bitwarden item types.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-The script utilizes several Python libraries, including `cryptography` for decryption, `pandas` for data manipulation, and built-in modules for file handling and user input. It provides a command-line interface for users to input the .spass file path and the export password, making it accessible for users with basic command-line knowledge.
+Convert Samsung Pass exports (`.spass` files) to Bitwarden-compatible JSON format.
 
-The converter is structured with a main `BitwardenConverter` class that encapsulates the core functionality, including methods for decryption, table parsing, and Bitwarden item creation. This design allows for easy maintenance and potential future enhancements.
+## ✨ Features
 
-Overall, this tool serves as a bridge for users transitioning from Samsung Pass to Bitwarden, simplifying the process of migrating their sensitive data between password management systems.
-.
+- 🔐 Decrypts Samsung Pass encrypted exports (AES-256-CBC)
+- 📋 Converts logins, secure notes, payment cards, and addresses
+- 🖥️ GUI and command-line interfaces
+- ✅ Comprehensive error messages
 
-## Prerequisites
+## 🚀 Quick Start
 
-- Python 3.7 or higher
-- pip (Python package installer)
+### Prerequisites
 
-## Installation
+- Python 3.10 or higher
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
-1. Clone this repository or download the script file.
-
-2. Install the required Python packages:
-
-```bash
-pip install cryptography pandas
-```
-
-## Exporting Samsung Pass Data
-
-To export your Samsung Pass data:
-
-1. Open the Samsung Pass app on your device.
-2. Go to Settings > Export data.
-3. Choose the data you want to export (passwords, cards, addresses, notes).
-4. Set a password for the export file (you'll need this later).
-5. Save the .spass file to your device.
-6. Transfer the .spass file to the computer where you'll run the script.
-
-## Usage
-
-1. Place the .spass file in the same directory as the script or note its full path.
-
-2. Run the script:
+### Installation
 
 ```bash
-python samsung_pass_to_bitwarden.py
+# Clone the repository
+git clone https://github.com/mssa2468/samsung-pass-to-bitwarden-converter
+cd samsung-pass-to-bitwarden-converter
+
+# Install dependencies with uv
+uv sync
+
+# Or with pip
+pip install cryptography
 ```
 
-3. When prompted, enter the path to your .spass file and the password you set during export.
+### Usage
 
-4. The script will generate a `bitwarden_export.json` file in the same directory.
+#### GUI Mode (Recommended)
 
-## Features
-
-- Decrypts Samsung Pass encrypted data using AES-CBC encryption.
-- Handles various data types: login credentials, secure notes, payment cards, and addresses.
-- Converts Samsung Pass data format to Bitwarden-compatible JSON structure.
-- Provides error handling for common issues during decryption and parsing.
-
-## Common Issues and Solutions
-
-### FileNotFoundError
-
-If you encounter:
+```bash
+uv run python gui.py
 ```
-FileNotFoundError: [Errno 2] No such file or directory: 'path/to/file.spass'
+
+1. Click **Browse** to select your `.spass` file
+2. Enter your export password
+3. Click **Convert to Bitwarden**
+4. Import the generated `bitwarden_export.json` into Bitwarden
+
+#### Command Line
+
+```bash
+uv run python samsung_pass_to_bitwarden.py
 ```
-**Solution**: Ensure the .spass file path is correct and the file exists in the specified location.
+
+## 📱 Exporting from Samsung Pass
+
+1. Open **Samsung Pass** on your device
+2. Go to **Settings** → **Export data**
+3. Select the data to export (passwords, cards, addresses, notes)
+4. Set a password for the export
+5. Transfer the `.spass` file to your computer
+
+## 🔧 Troubleshooting
+
+### PermissionError: Permission denied
+
+```
+PermissionError: [Errno 13] Permission denied: 'C:\Users\...\Python'
+```
+
+**Cause**: You entered a folder path instead of the `.spass` file.
+
+**Solution**: Enter the full path to your `.spass` file, for example:
+```
+C:\Users\YourName\Downloads\samsung_pass_export.spass
+```
 
 ### Decryption Error
 
-If you see:
+**Cause**: Incorrect password.
+
+**Solution**: Double-check the password you set when exporting from Samsung Pass.
+
+## 🛠️ Development
+
+```bash
+# Install all dependencies (including dev)
+uv sync --all-extras
+
+# Run tests
+uv run pytest
+
+# Run linter
+uv run ruff check .
+
+# Run type checker
+uv run ty check
+
+# Format code
+uv run ruff format .
 ```
-Error decrypting file: Padding is incorrect.
+
+## 📁 Project Structure
+
 ```
-**Solution**: This usually occurs when the provided password is incorrect. Double-check your password and try again.
-
-### Not Enough Tables Found
-
-If you get:
+samsung-pass-to-bitwarden-converter/
+├── samsung_pass_to_bitwarden.py  # Core converter logic
+├── gui.py                        # Tkinter GUI
+├── tests/
+│   └── test_converter.py         # Test suite
+├── pyproject.toml                # Project configuration
+├── uv.lock                       # Dependency lock file
+├── LICENSE                       # MIT License
+└── README.md
 ```
-Error: Not enough tables found in the decrypted data.
-```
-**Solution**: This error suggests that the .spass file might be corrupted or in an unexpected format. Try re-exporting your data from Samsung Pass.
 
-### UnicodeDecodeError
+## 📄 License
 
-If you encounter:
-```
-UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte
-```
-**Solution**: This error might occur if the decrypted data contains non-UTF-8 characters. The script uses error handling to ignore such characters, but if the issue persists, you may need to modify the `safe_decode` function to handle specific encodings.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file.
 
-## Contributing
+## ⚠️ Disclaimer
 
-Contributions to improve the script or add new features are welcome. Please feel free to submit pull requests or open issues for any bugs or enhancements.
-
-## License
-
-This project is open-source and available under the MIT License.
-
-## Disclaimer
-
-This tool is not officially associated with Samsung or Bitwarden. Use it at your own risk and always ensure you have backups of your data before performing any conversions.
+This tool is not affiliated with Samsung or Bitwarden. Use at your own risk. Always backup your data before conversion.
