@@ -16,8 +16,8 @@ dev = [
 ]
 
 [project.scripts]
-spass-convert = "samsung_pass_to_bitwarden:main"
-spass-gui = "gui:main"
+spass-convert = "src.converter:main"
+spass-gui = "src.gui:main"
 
 [tool.ruff]
 line-length = 100

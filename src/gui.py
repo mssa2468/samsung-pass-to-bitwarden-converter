@@ -11,7 +11,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from samsung_pass_to_bitwarden import (
+from src.converter import (
     BitwardenConverter,
     DecryptionError,
     PathValidationError,
@@ -75,7 +75,9 @@ class ConverterApp:
         password_frame.pack(fill=tk.X, pady=(0, 15))
 
         self.password_var = tk.StringVar()
-        password_entry = ttk.Entry(password_frame, textvariable=self.password_var, show="•", width=50)
+        password_entry = ttk.Entry(
+            password_frame, textvariable=self.password_var, show="•", width=50
+        )
         password_entry.pack(fill=tk.X)
 
         # Show password checkbox
@@ -84,7 +86,9 @@ class ConverterApp:
             password_frame,
             text="Show password",
             variable=self.show_password_var,
-            command=lambda: password_entry.configure(show="" if self.show_password_var.get() else "•"),
+            command=lambda: password_entry.configure(
+                show="" if self.show_password_var.get() else "•"
+            ),
         )
         show_password_cb.pack(anchor=tk.W, pady=(5, 0))
 
@@ -167,12 +171,15 @@ class ConverterApp:
         except PathValidationError as e:
             self._on_error(f"Path Error:\n{e}")
         except DecryptionError as e:
-            self._on_error(f"Decryption Error:\n{e}\n\nThis usually means the password is incorrect.")
+            self._on_error(
+                f"Decryption Error:\n{e}\n\nThis usually means the password is incorrect."
+            )
         except Exception as e:
             self._on_error(f"Unexpected Error:\n{e!s}")
 
     def _on_success(self, output_path: str, item_count: int) -> None:
         """Handle successful conversion (called from background thread)"""
+
         def update_ui() -> None:
             self.progress.stop()
             self.progress.pack_forget()
@@ -187,6 +194,7 @@ class ConverterApp:
 
     def _on_error(self, message: str) -> None:
         """Handle conversion error (called from background thread)"""
+
         def update_ui() -> None:
             self.progress.stop()
             self.progress.pack_forget()

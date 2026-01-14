@@ -17,108 +17,60 @@ Convert Samsung Pass exports (`.spass` files) to Bitwarden-compatible JSON forma
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.10+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/mssa2468/samsung-pass-to-bitwarden-converter
 cd samsung-pass-to-bitwarden-converter
-
-# Install dependencies with uv
 uv sync
-
-# Or with pip
-pip install cryptography
 ```
 
 ### Usage
 
-#### GUI Mode (Recommended)
+#### GUI Mode
 
 ```bash
-uv run python gui.py
+uv run python src/gui.py
 ```
-
-1. Click **Browse** to select your `.spass` file
-2. Enter your export password
-3. Click **Convert to Bitwarden**
-4. Import the generated `bitwarden_export.json` into Bitwarden
 
 #### Command Line
 
 ```bash
-uv run python samsung_pass_to_bitwarden.py
+uv run python src/converter.py
 ```
 
 ## 📱 Exporting from Samsung Pass
 
-1. Open **Samsung Pass** on your device
-2. Go to **Settings** → **Export data**
-3. Select the data to export (passwords, cards, addresses, notes)
-4. Set a password for the export
-5. Transfer the `.spass` file to your computer
+1. Open **Samsung Pass** → **Settings** → **Export data**
+2. Select data to export and set a password
+3. Transfer `.spass` file to your computer
 
-## 🔧 Troubleshooting
-
-### PermissionError: Permission denied
-
-```
-PermissionError: [Errno 13] Permission denied: 'C:\Users\...\Python'
-```
-
-**Cause**: You entered a folder path instead of the `.spass` file.
-
-**Solution**: Enter the full path to your `.spass` file, for example:
-```
-C:\Users\YourName\Downloads\samsung_pass_export.spass
-```
-
-### Decryption Error
-
-**Cause**: Incorrect password.
-
-**Solution**: Double-check the password you set when exporting from Samsung Pass.
-
-## 🛠️ Development
+## 🔧 Development
 
 ```bash
-# Install all dependencies (including dev)
 uv sync --all-extras
-
-# Run tests
 uv run pytest
-
-# Run linter
 uv run ruff check .
-
-# Run type checker
 uv run ty check
-
-# Format code
-uv run ruff format .
 ```
 
 ## 📁 Project Structure
 
 ```
-samsung-pass-to-bitwarden-converter/
-├── samsung_pass_to_bitwarden.py  # Core converter logic
-├── gui.py                        # Tkinter GUI
+├── src/
+│   ├── converter.py    # Core converter logic
+│   └── gui.py          # Tkinter GUI
+├── scripts/
+│   └── generate_test_spass.py
 ├── tests/
-│   └── test_converter.py         # Test suite
-├── pyproject.toml                # Project configuration
-├── uv.lock                       # Dependency lock file
-├── LICENSE                       # MIT License
+│   └── test_converter.py
+├── pyproject.toml
 └── README.md
 ```
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file.
-
-## ⚠️ Disclaimer
-
-This tool is not affiliated with Samsung or Bitwarden. Use at your own risk. Always backup your data before conversion.
+MIT License - see [LICENSE](LICENSE)

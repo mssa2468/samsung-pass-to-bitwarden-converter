@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from samsung_pass_to_bitwarden import (
+from src.converter import (
     BitwardenConverter,
     CryptoConfig,
     DecryptionError,
