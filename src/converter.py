@@ -7,20 +7,25 @@ from __future__ import annotations
 
 import base64
 import json
-import os
 import sys
 from dataclasses import dataclass
 from getpass import getpass
 from pathlib import Path
 from typing import Any
 
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+EXPORT_FILENAME = "bitwarden_export.json"
+TABLE_COUNT = 4
+LOGIN_TYPE = 1
+NOTE_TYPE = 2
+CARD_TYPE = 3
+IDENTITY_TYPE = 4
 
-@dataclass
+
+@dataclass(frozen=True)
 class CryptoConfig:
     """Cryptographic configuration parameters"""
 
@@ -33,13 +38,9 @@ class CryptoConfig:
 class DecryptionError(Exception):
     """Custom exception for decryption-related errors"""
 
-    pass
-
 
 class PathValidationError(Exception):
     """Custom exception for path validation errors"""
-
-    pass
 
 
 def validate_spass_path(path_str: str) -> Path:
@@ -82,9 +83,13 @@ def validate_spass_path(path_str: str) -> Path:
             "Please select the exported Samsung Pass file (ending in .spass)."
         )
 
-    # Check if file is readable
-    if not os.access(path, os.R_OK):
-        raise PathValidationError(f"Cannot read file: {path}\nPlease check file permissions.")
+    try:
+        with path.open("rb"):
+            pass
+    except OSError as e:
+        raise PathValidationError(
+            f"Cannot read file: {path}\nPlease check file permissions."
+        ) from e
 
     return path
 
@@ -106,11 +111,10 @@ class BitwardenConverter:
                 length=self.config.KEY_LENGTH,
                 salt=salt,
                 iterations=self.config.ITERATION_COUNT,
-                backend=default_backend(),
             )
             key = kdf.derive(password.encode())
 
-            cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+            cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
             decryptor = cipher.decryptor()
             decrypted = decryptor.update(ciphertext) + decryptor.finalize()
 
@@ -120,7 +124,7 @@ class BitwardenConverter:
             raise DecryptionError(f"Decryption failed: {e!s}") from e
 
     @staticmethod
-    def safe_decode(field: bytes, encoding: str = "utf-8") -> str:
+    def safe_decode(field: bytes | None, encoding: str = "utf-8") -> str:
         """Safely decode bytes to string"""
         if not field:
             return ""
@@ -168,17 +172,12 @@ class BitwardenConverter:
         if current_table:
             tables.append(self.parse_table(current_table))
 
-        # Ensure we always return 4 tables
-        while len(tables) < 4:
-            tables.append([])
-
+        tables.extend([] for _ in range(TABLE_COUNT - len(tables)))
         return (tables[0], tables[1], tables[2], tables[3])
 
     def create_bitwarden_item(self, item_type: int, name: str, **kwargs: Any) -> dict[str, Any]:
         """Create a single Bitwarden item"""
-        item: dict[str, Any] = {"type": item_type, "name": name}
-        item.update(kwargs)
-        return item
+        return {"type": item_type, "name": name, **kwargs}
 
     def create_bitwarden_export(
         self,
@@ -190,62 +189,58 @@ class BitwardenConverter:
         """Create complete Bitwarden export"""
         items: list[dict[str, Any]] = []
 
-        # Process login credentials
-        for row in credentials:
-            items.append(
-                self.create_bitwarden_item(
-                    1,
-                    row.get("origin_url", ""),
-                    login={
-                        "uris": [{"uri": row.get("origin_url", "")}],
-                        "username": row.get("username_value", ""),
-                        "password": row.get("password_value", ""),
-                    },
-                )
+        items.extend(
+            self.create_bitwarden_item(
+                LOGIN_TYPE,
+                row.get("origin_url", ""),
+                login={
+                    "uris": [{"uri": row.get("origin_url", "")}],
+                    "username": row.get("username_value", ""),
+                    "password": row.get("password_value", ""),
+                },
             )
+            for row in credentials
+        )
 
-        # Process secure notes
-        for row in notes:
-            items.append(
-                self.create_bitwarden_item(
-                    2,
-                    row.get("note_title", ""),
-                    secureNote={},
-                    notes=row.get("note_detail", ""),
-                )
+        items.extend(
+            self.create_bitwarden_item(
+                NOTE_TYPE,
+                row.get("note_title", ""),
+                secureNote={},
+                notes=row.get("note_detail", ""),
             )
+            for row in notes
+        )
 
-        # Process payment cards
-        for row in cards:
-            items.append(
-                self.create_bitwarden_item(
-                    3,
-                    row.get("reserved_5", ""),
-                    card={
-                        "cardholderName": row.get("name_on_card", ""),
-                        "number": row.get("card_number", row.get("qݞzr", "")),
-                        "expMonth": row.get("expiration_month", ""),
-                        "expYear": row.get("expiration_year", ""),
-                        "code": row.get("security_code", ""),
-                    },
-                )
+        items.extend(
+            self.create_bitwarden_item(
+                CARD_TYPE,
+                row.get("reserved_5", ""),
+                card={
+                    "cardholderName": row.get("name_on_card", ""),
+                    "number": row.get("card_number", row.get("qݞzr", "")),
+                    "expMonth": row.get("expiration_month", ""),
+                    "expYear": row.get("expiration_year", ""),
+                    "code": row.get("security_code", ""),
+                },
             )
+            for row in cards
+        )
 
-        # Process addresses
-        for row in addresses:
-            items.append(
-                self.create_bitwarden_item(
-                    4,
-                    row.get("~e", row.get("name", "")),
-                    identity={
-                        "firstName": row.get("~e", row.get("name", "")),
-                        "address1": row.get("street_address", ""),
-                        "city": row.get("r+r", row.get("city", "")),
-                        "postalCode": row.get("*\\", row.get("postal_code", "")),
-                        "country": row.get("country_code", ""),
-                    },
-                )
+        items.extend(
+            self.create_bitwarden_item(
+                IDENTITY_TYPE,
+                row.get("~e", row.get("name", "")),
+                identity={
+                    "firstName": row.get("~e", row.get("name", "")),
+                    "address1": row.get("street_address", ""),
+                    "city": row.get("r+r", row.get("city", "")),
+                    "postalCode": row.get("*\\", row.get("postal_code", "")),
+                    "country": row.get("country_code", ""),
+                },
             )
+            for row in addresses
+        )
 
         return {"items": items}
 
@@ -256,12 +251,20 @@ class BitwardenConverter:
         # Validate path first
         validated_path = validate_spass_path(str(spass_path))
 
-        with open(validated_path, encoding="utf-8") as f:
-            encrypted_data = f.read().strip()
+        encrypted_data = validated_path.read_text(encoding="utf-8").strip()
 
         decrypted_data = self.decrypt_spass(encrypted_data, password)
         tables = self.parse_tables(decrypted_data.split(b"\n"))
         return self.create_bitwarden_export(*tables)
+
+
+def write_bitwarden_export(
+    spass_path: str | Path, export_data: dict[str, list[dict[str, Any]]]
+) -> Path:
+    """Write Bitwarden JSON next to the Samsung Pass export."""
+    output_path = validate_spass_path(str(spass_path)).with_name(EXPORT_FILENAME)
+    output_path.write_text(json.dumps(export_data, indent=2) + "\n", encoding="utf-8")
+    return output_path
 
 
 def main(spass_path: str | None = None, password: str | None = None) -> None:
@@ -276,11 +279,9 @@ def main(spass_path: str | None = None, password: str | None = None) -> None:
             password = getpass("Enter password: ")
 
         converter = BitwardenConverter()
-        export_data = converter.process_file(spass_path, password)
-
-        output_path = Path(spass_path).with_name("bitwarden_export.json")
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(export_data, f, indent=2)
+        validated_path = validate_spass_path(spass_path)
+        export_data = converter.process_file(validated_path, password)
+        output_path = write_bitwarden_export(validated_path, export_data)
 
         print("\n✓ Export successful!")
         print(f"  Output file: {output_path}")

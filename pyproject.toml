@@ -5,14 +5,14 @@ description = "Convert Samsung Pass exports to Bitwarden format"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "cryptography>=42.0.0",
+    "cryptography>=49.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
-    "ruff>=0.4.0",
-    "ty>=0.0.1a6",
+    "pytest>=9.1.1",
+    "ruff>=0.15.21",
+    "ty>=0.0.59",
 ]
 
 [project.scripts]

@@ -5,16 +5,15 @@ A simple Tkinter interface for the converter.
 
 from __future__ import annotations
 
-import json
 import threading
 import tkinter as tk
-from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from src.converter import (
     BitwardenConverter,
     DecryptionError,
     PathValidationError,
+    write_bitwarden_export,
 )
 
 
@@ -161,9 +160,7 @@ class ConverterApp:
             converter = BitwardenConverter()
             export_data = converter.process_file(file_path, password)
 
-            output_path = Path(file_path).with_name("bitwarden_export.json")
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(export_data, f, indent=2)
+            output_path = write_bitwarden_export(file_path, export_data)
 
             item_count = len(export_data["items"])
             self._on_success(str(output_path), item_count)

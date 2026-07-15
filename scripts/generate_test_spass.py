@@ -4,15 +4,18 @@ Generate a test .spass file for testing the converter.
 
 import base64
 import os
+from pathlib import Path
 
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from src.converter import CryptoConfig
 
-def create_test_spass(output_path: str, password: str) -> None:
+
+def create_test_spass(output_path: str | Path, password: str) -> None:
     """Create a test .spass file with sample data."""
+    config = CryptoConfig()
 
     # Sample data in Samsung Pass format
     # Format: header, flags, then tables separated by "next_table"
@@ -35,25 +38,24 @@ V2lGaSBQYXNzd29yZA==;TXlXaUZpUGFzc3dvcmQxMjM=
 """
 
     # Encryption parameters (must match the converter)
-    salt = os.urandom(20)
+    salt = os.urandom(config.SALT_BYTES)
     iv = os.urandom(16)
 
     # Derive key using PBKDF2
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
-        length=32,
+        length=config.KEY_LENGTH,
         salt=salt,
-        iterations=70000,
-        backend=default_backend(),
+        iterations=config.ITERATION_COUNT,
     )
     key = kdf.derive(password.encode())
 
     # Pad the data
-    padder = padding.PKCS7(128).padder()
+    padder = padding.PKCS7(config.BLOCK_SIZE).padder()
     padded_data = padder.update(test_data) + padder.finalize()
 
     # Encrypt with AES-CBC
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
     encryptor = cipher.encryptor()
     ciphertext = encryptor.update(padded_data) + encryptor.finalize()
 
@@ -64,8 +66,7 @@ V2lGaSBQYXNzd29yZA==;TXlXaUZpUGFzc3dvcmQxMjM=
     encrypted_base64 = base64.b64encode(encrypted_bytes).decode("utf-8")
 
     # Write to file
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(encrypted_base64)
+    Path(output_path).write_text(encrypted_base64, encoding="utf-8")
 
     print(f"✓ Created test .spass file: {output_path}")
     print(f"  Password: {password}")

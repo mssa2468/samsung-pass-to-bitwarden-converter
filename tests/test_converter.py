@@ -15,6 +15,7 @@ from src.converter import (
     DecryptionError,
     PathValidationError,
     validate_spass_path,
+    write_bitwarden_export,
 )
 
 
@@ -45,7 +46,7 @@ class TestPathValidation:
         """Test that non-.spass file raises PathValidationError"""
         wrong_file = tmp_path / "test.txt"
         wrong_file.write_text("test")
-        with pytest.raises(PathValidationError, match="does not have a .spass extension"):
+        with pytest.raises(PathValidationError, match=r"does not have a \.spass extension"):
             validate_spass_path(str(wrong_file))
 
     def test_valid_spass_file_returns_path(self, tmp_path: Path) -> None:
@@ -214,6 +215,16 @@ class TestProcessFile:
         converter = BitwardenConverter()
         with pytest.raises(DecryptionError):
             converter.process_file(str(spass_file), "password")
+
+    def test_write_bitwarden_export_strips_quoted_path(self, tmp_path: Path) -> None:
+        """Test writing the export beside a quoted .spass path."""
+        spass_file = tmp_path / "quoted.spass"
+        spass_file.write_text("encrypted_data")
+
+        output_path = write_bitwarden_export(f'"{spass_file}"', {"items": []})
+
+        assert output_path == tmp_path / "bitwarden_export.json"
+        assert output_path.read_text(encoding="utf-8") == '{\n  "items": []\n}\n'
 
 
 class TestIntegration:
