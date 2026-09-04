@@ -113,6 +113,12 @@ class TestBitwardenConverter:
         result = converter.parse_table([b"col1;col2;col3"])
         assert result == []
 
+    def test_parse_table_keeps_short_plaintext_headers(self) -> None:
+        """Headers like 'name'/'city' are plaintext, not base64 ('city' decodes to 'r+r')."""
+        converter = BitwardenConverter()
+        result = converter.parse_table([b"name;city", b"Sm9obiBEb2U=;TmV3IFlvcms="])
+        assert result == [{"name": "John Doe", "city": "New York"}]
+
     def test_parse_table_with_data(self) -> None:
         """Test parsing table with header and data rows"""
         converter = BitwardenConverter()
@@ -180,6 +186,17 @@ class TestBitwardenConverter:
         assert result["items"][0]["type"] == 2
         assert result["items"][0]["notes"] == "Secret info"
 
+    def test_empty_credential_rows_are_skipped(self) -> None:
+        """Rows with no URL, username, or password add clutter, not value."""
+        converter = BitwardenConverter()
+        credentials = [
+            {"origin_url": "", "username_value": "", "password_value": ""},
+            {"origin_url": "https://example.com", "username_value": "u", "password_value": "p"},
+        ]
+        result = converter.create_bitwarden_export(credentials, [], [], [])
+        assert len(result["items"]) == 1
+        assert result["items"][0]["login"]["username"] == "u"
+
 
 class TestDecryption:
     """Tests for decryption functionality"""
@@ -195,8 +212,14 @@ class TestDecryption:
         converter = BitwardenConverter()
         # Create some valid base64 but with wrong structure
         fake_data = base64.b64encode(b"a" * 100).decode()
-        with pytest.raises(DecryptionError):
+        with pytest.raises(DecryptionError, match="password is likely incorrect"):
             converter.decrypt_spass(fake_data, "wrong_password")
+
+    def test_corrupt_data_message_differs_from_wrong_password(self) -> None:
+        """Bad encoding reports corruption, not a wrong password."""
+        converter = BitwardenConverter()
+        with pytest.raises(DecryptionError, match="corrupt"):
+            converter.decrypt_spass("abc", "password")
 
 
 class TestProcessFile:
@@ -277,3 +300,106 @@ class TestIntegration:
         assert types.count(2) == 1  # note
         assert types.count(3) == 1  # card
         assert types.count(4) == 1  # address
+
+
+class TestRealFormat:
+    """Real Samsung Pass exports: header block, header-identified tables, real columns."""
+
+    def test_tables_identified_by_header_not_position(self) -> None:
+        """A leading 'false' flags line must not shift logins into card slots."""
+        converter = BitwardenConverter()
+        data = [
+            b"32",
+            b"true;true;true;true",
+            b"false",
+            b"_id;origin_url;username_value;password_value",
+            b"MQ==;aHR0cHM6Ly9leGFtcGxlLmNvbQ==;dXNlcg==;cGFzcw==",
+            b"next_table",
+            b"_id;note_title;note_detail",
+            b"MQ==;dGl0bGU=;ZGV0YWls",
+        ]
+        credentials, cards, addresses, notes = converter.parse_tables(data)
+        assert [r["origin_url"] for r in credentials] == ["https://example.com"]
+        assert cards == [] and addresses == []
+        assert [(r["note_title"], r["note_detail"]) for r in notes] == [("title", "detail")]
+
+    def test_null_placeholder_becomes_empty(self) -> None:
+        """Samsung writes &&&NULL&&& for nulls; it must not leak into the export."""
+        assert BitwardenConverter.safe_decode(b"&&&NULL&&&") == ""
+        converter = BitwardenConverter()
+        rows = converter.parse_table([b"a;b", b"eA==;" + b"&&&NULL&&&"])
+        assert rows == [{"a": "x", "b": ""}]
+
+    def test_real_column_names_mapped(self) -> None:
+        """full_name/zipcode/card_security_code are the real column names."""
+        converter = BitwardenConverter()
+        result = converter.create_bitwarden_export(
+            [
+                {
+                    "title": "AdAway",
+                    "origin_url": "https://a.example",
+                    "username_value": "u",
+                    "password_value": "p",
+                }
+            ],
+            [{"reserved_5": "", "name_on_card": "jack", "card_security_code": "123"}],
+            [{"full_name": "Jane", "zipcode": "10001"}],
+            [{"note_title": "", "note_detail": ""}],
+        )
+        by_type = {item["type"]: item for item in result["items"]}
+        assert by_type[1]["name"] == "AdAway"
+        assert by_type[3]["name"] == "jack"  # falls back to holder name
+        assert by_type[3]["card"]["code"] == "123"
+        assert by_type[4]["identity"]["firstName"] == "Jane"
+        assert by_type[4]["identity"]["postalCode"] == "10001"
+        assert 2 not in by_type  # empty note skipped
+
+    def test_otp_blob_becomes_totp_uri(self) -> None:
+        """Samsung's OTP JSON maps to a Bitwarden TOTP URI; garbage maps to ''."""
+        converter = BitwardenConverter()
+        otp = '{"algo":"SHA1","digits":6,"issuer":"2FAS","name":"Test","period":30,"secret":"JBSWY3DPEHPK3PXP"}'
+        result = converter.create_bitwarden_export(
+            [
+                {
+                    "origin_url": "https://a.example",
+                    "username_value": "u",
+                    "password_value": "p",
+                    "otp": otp,
+                }
+            ],
+            [],
+            [],
+            [],
+        )
+        totp = result["items"][0]["login"]["totp"]
+        assert totp.startswith("otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP")
+        assert "issuer=2FAS" in totp and "digits=6" in totp and "period=30" in totp
+        bad = converter.create_bitwarden_export(
+            [
+                {
+                    "origin_url": "https://a.example",
+                    "username_value": "u",
+                    "password_value": "p",
+                    "otp": "not-json",
+                }
+            ],
+            [],
+            [],
+            [],
+        )
+        assert bad["items"][0]["login"]["totp"] == ""
+
+    def test_card_number_only_when_digits(self) -> None:
+        """Plaintext PANs map; encrypted blobs must not leak into the number field."""
+        converter = BitwardenConverter()
+        ok = converter.create_bitwarden_export(
+            [], [{"name_on_card": "jack", "card_number_encrypted": "123456789123456789"}], [], []
+        )
+        assert ok["items"][0]["card"]["number"] == "123456789123456789"
+        encrypted = converter.create_bitwarden_export(
+            [],
+            [{"name_on_card": "jack", "card_number_encrypted": "q80=v8Y€2;\x00\x01binary"}],
+            [],
+            [],
+        )
+        assert encrypted["items"][0]["card"]["number"] == ""

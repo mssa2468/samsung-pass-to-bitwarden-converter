@@ -56,6 +56,8 @@ htmlcov/
 
 # Output files
 bitwarden_export.json
+# Samsung Pass exports (may contain secrets)
+*.spass
 
 # OS files
 .DS_Store

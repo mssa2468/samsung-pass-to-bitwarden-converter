@@ -5,9 +5,15 @@ A simple Tkinter interface for the converter.
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
 import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+from typing import Any
 
 from src.converter import (
     BitwardenConverter,
@@ -15,6 +21,46 @@ from src.converter import (
     PathValidationError,
     write_bitwarden_export,
 )
+
+
+def _dnd_backend() -> tuple[Any, Any]:
+    """tkinterdnd2 names, or (None, None) when drag-and-drop isn't installed."""
+    try:
+        from tkinterdnd2 import DND_FILES, TkinterDnD
+
+        return DND_FILES, TkinterDnD
+    except ImportError:
+        return None, None
+
+
+DND_FILES, TkinterDnD = _dnd_backend()
+
+CONFIG_PATH = Path.home() / ".spass-converter.json"
+
+
+def _load_last_dir() -> str:
+    """Folder last browsed, remembered across runs (best effort)."""
+    try:
+        return json.loads(CONFIG_PATH.read_text(encoding="utf-8")).get("last_dir", "")
+    except (OSError, ValueError):
+        return ""
+
+
+def _save_last_dir(directory: str) -> None:
+    try:
+        CONFIG_PATH.write_text(json.dumps({"last_dir": directory}), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _open_folder(path: str) -> None:
+    """Reveal a folder in the OS file manager."""
+    if sys.platform == "win32":
+        os.startfile(path)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
 
 
 class ConverterApp:
@@ -26,6 +72,8 @@ class ConverterApp:
         self.root.geometry("550x400")
         self.root.resizable(True, True)
         self.root.minsize(450, 350)
+        self.output_dir: str | None = None
+        self.last_dir = _load_last_dir()
 
         # Configure style
         self.style = ttk.Style()
@@ -112,15 +160,26 @@ class ConverterApp:
         )
         status_label.pack(pady=(10, 0))
 
-        # Result frame (hidden by default)
+        # Result frame (packed only after a successful conversion)
         self.result_frame = ttk.Frame(main_frame)
-        self.result_label = ttk.Label(self.result_frame, text="")
-        self.result_label.pack()
+        self.open_folder_btn = ttk.Button(
+            self.result_frame, text="Open output folder", command=self._open_output_folder
+        )
+        self.open_folder_btn.pack()
+
+        if TkinterDnD is not None:
+            drop_register = getattr(self.root, "drop_target_register", None)
+            drop_bind = getattr(self.root, "dnd_bind", None)
+            if drop_register is not None and drop_bind is not None:
+                drop_register(DND_FILES)
+                drop_bind("<<Drop>>", self._on_drop)
+                self.status_var.set("Ready. Drop a .spass file or browse to begin.")
 
     def _browse_file(self) -> None:
         """Open file browser to select .spass file"""
         filename = filedialog.askopenfilename(
             title="Select Samsung Pass Export File",
+            initialdir=self.last_dir or None,
             filetypes=[
                 ("Samsung Pass files", "*.spass"),
                 ("All files", "*.*"),
@@ -128,6 +187,8 @@ class ConverterApp:
         )
         if filename:
             self.file_path_var.set(filename)
+            self.last_dir = str(Path(filename).parent)
+            _save_last_dir(self.last_dir)
             self.status_var.set("File selected. Enter password and click Convert.")
 
     def _start_conversion(self) -> None:
@@ -145,6 +206,7 @@ class ConverterApp:
 
         # Disable button and show progress
         self.convert_btn.configure(state=tk.DISABLED)
+        self.result_frame.pack_forget()
         self.progress.pack(fill=tk.X, pady=(0, 10))
         self.progress.start(10)
         self.status_var.set("Converting...")
@@ -168,43 +230,68 @@ class ConverterApp:
         except PathValidationError as e:
             self._on_error(f"Path Error:\n{e}")
         except DecryptionError as e:
-            self._on_error(
-                f"Decryption Error:\n{e}\n\nThis usually means the password is incorrect."
-            )
+            self._on_error(f"Decryption Error:\n{e}")
         except Exception as e:
             self._on_error(f"Unexpected Error:\n{e!s}")
+
+    def _finish(self, update_ui) -> None:
+        """Reset progress/button, then run UI update on the main thread."""
+
+        def wrapped() -> None:
+            self.progress.stop()
+            self.progress.pack_forget()
+            self.convert_btn.configure(state=tk.NORMAL)
+            update_ui()
+
+        self.root.after(0, wrapped)
 
     def _on_success(self, output_path: str, item_count: int) -> None:
         """Handle successful conversion (called from background thread)"""
 
         def update_ui() -> None:
-            self.progress.stop()
-            self.progress.pack_forget()
-            self.convert_btn.configure(state=tk.NORMAL)
+            self.output_dir = str(Path(output_path).parent)
+            self.result_frame.pack(pady=(10, 0))
             self.status_var.set(f"✓ Success! Exported {item_count} items to:\n{output_path}")
             messagebox.showinfo(
                 "Conversion Complete",
                 f"Successfully exported {item_count} items!\n\nOutput file:\n{output_path}",
             )
 
-        self.root.after(0, update_ui)
+        self._finish(update_ui)
 
     def _on_error(self, message: str) -> None:
         """Handle conversion error (called from background thread)"""
 
         def update_ui() -> None:
-            self.progress.stop()
-            self.progress.pack_forget()
-            self.convert_btn.configure(state=tk.NORMAL)
+            self.result_frame.pack_forget()
             self.status_var.set("✗ Conversion failed. See error details.")
             messagebox.showerror("Conversion Failed", message)
 
-        self.root.after(0, update_ui)
+        self._finish(update_ui)
+
+    def _on_drop(self, event) -> None:
+        """Use a file dropped onto the window (needs tkinterdnd2)."""
+        data = event.data.strip()
+        if data.startswith("{"):
+            end = data.find("}")
+            path = data[1:end] if end != -1 else data.strip("{}")
+        else:
+            path = data.split()[0]
+        if path:
+            self.file_path_var.set(path)
+            self.last_dir = str(Path(path).parent)
+            _save_last_dir(self.last_dir)
+            self.status_var.set("File selected. Enter password and click Convert.")
+
+    def _open_output_folder(self) -> None:
+        """Reveal the last export folder in the file manager."""
+        if self.output_dir:
+            _open_folder(self.output_dir)
 
 
 def main() -> None:
     """Main entry point for GUI application"""
-    root = tk.Tk()
+    root = TkinterDnD.Tk() if TkinterDnD is not None else tk.Tk()
     ConverterApp(root)
     root.mainloop()
 

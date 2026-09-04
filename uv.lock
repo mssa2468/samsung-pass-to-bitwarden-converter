@@ -183,7 +183,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -281,9 +281,10 @@ wheels = [
 [[package]]
 name = "samsung-pass-to-bitwarden"
 version = "2.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
+    { name = "tkinterdnd2" },
 ]
 
 [package.optional-dependencies]
@@ -298,9 +299,19 @@ requires-dist = [
     { name = "cryptography", specifier = ">=49.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.21" },
+    { name = "tkinterdnd2", specifier = ">=0.6.2" },
     { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.59" },
 ]
 provides-extras = ["dev"]
+
+[[package]]
+name = "tkinterdnd2"
+version = "0.6.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3b/68/a7400de3c15038522b00540480a1273809ad4680b941e9c5f82520b27f2f/tkinterdnd2-0.6.2.tar.gz", hash = "sha256:e015c2d863c9292e61d0294dea43010ff99c3cc9423e564676e04df413de9916", size = 729841, upload-time = "2026-07-05T00:05:21.316Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/1b/039642c212c24887a941af706b006365f3733d88aab383f0cf151768403c/tkinterdnd2-0.6.2-py3-none-any.whl", hash = "sha256:b6a8b229d26286c022bb2fbd311c2e431e4d9bbab8133be80e9c98e7bcf9fe59", size = 811654, upload-time = "2026-07-05T00:05:19.682Z" },
+]
 
 [[package]]
 name = "tomli"
